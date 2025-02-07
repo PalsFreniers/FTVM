@@ -1,7 +1,0 @@
-[
-{
-	"directory": "/home/tidian/Documents/code/cpp/byteCoder",
-	"arguments": ["clang++", "-I", "includes", "main.cpp", "-Wall", "-Wextra", "-std=c++98"],
-	"file": "main.cpp",
-}
-]
