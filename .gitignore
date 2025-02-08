@@ -1,3 +1,5 @@
 compile_commands.json
 main
 *.swp
+OBJ/*
+test*

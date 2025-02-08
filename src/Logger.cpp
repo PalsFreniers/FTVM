@@ -1,5 +1,5 @@
-#include <Logger.h>
-#include <colors.h>
+#include <Logger.hpp>
+#include <colors.hpp>
 #include <cstdarg>
 #include <iostream>
 #include <stdexcept>
@@ -45,6 +45,9 @@ void logFormat(const std::string str, size_t &i, std::va_list lst) {
 }
 
 void Logger::log(LogLevel lvl, const std::string fmt, ...) {
+#ifdef RELEASE
+        if(lvl == LogLevel::DEBUG) return;
+#endif // RELEASE
         std::va_list lst;
         std::cerr << getLogStr(lvl) << (_name.empty() ? "" : " ") << _name << " => ";
         va_start(lst, fmt);
@@ -54,5 +57,5 @@ void Logger::log(LogLevel lvl, const std::string fmt, ...) {
         }
         va_end(lst);
         std::cerr << std::endl;
-        if(lvl == FATAL) throw std::logic_error(RGB(127, 0, 0) "!![PANIC]!! fatal logger has been reached\n");
+        if(lvl == LogLevel::FATAL) throw std::logic_error(RGB(127, 0, 0) "!![PANIC]!! fatal logger has been reached\n");
 }
