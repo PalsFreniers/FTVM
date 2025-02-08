@@ -6,11 +6,13 @@
 #include <fstream>
 #include <stdexcept>
 #include <fcntl.h>
+#include <string>
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <utils.hpp>
 #include <sha256.hpp>
+#include <vector>
 
 namespace FTVM {
         Program::Program() : _file(NULL), _size(0), _startOffset(0), _path("") {}
@@ -87,6 +89,7 @@ namespace FTVM {
                                 }
                         }
                         if(_startOffset == 0) throw std::runtime_error("NoEntryException");
+                        if(!SHFviewed) throw std::runtime_error("NoFunctionsException");
                 } catch(std::exception &e) {
                         unload();
                         _log.log(ERROR, "unable to load FTVM bytecode : `/s`", e.what());
@@ -115,10 +118,31 @@ namespace FTVM {
         void compile(std::string path, std::string outPath) {
                 Logger _log("FTVMCompiler");
                 std::ifstream input;
+                input.exceptions(std::ifstream::failbit);
+                int lne = 0;
+                std::vector<u64> prog;
                 try {
                         input.open(path);
+                        std::string l;
+                        while(std::getline(input, l)) {
+                                lne++;
+                                std::vector<std::string> line = split(split(l, "--")[0], " ");
+                                if(line.empty()) throw std::runtime_error("line : " + std::to_string(lne) + ", unable to parse");
+                                if(line[0] == "PUSH") {
+                                        if(line.size() != 1) throw std::runtime_error("line : " + std::to_string(lne) + ", pop instruction need 1 arguments but got " + std::to_string(line.size()));
+                                        int val = to_int(line[1].c_str());
+                                        prog.push_back();
+                                }
+                        }
                 } catch(std::exception &e) {
-
+                        _log.log(LogLevel::ERROR, "unable to compile /s: /s", path.c_str(), e.what());
                 }
         }
 }
+
+/**
+ * 0xFF push
+ * 0xFE pop
+ * 0xFD call
+ * 0xFC ret
+ **/

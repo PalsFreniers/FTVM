@@ -4,7 +4,24 @@
 #include <string>
 #include <unordered_map>
 
+#define getSuperInstruction(insr)    (((insr) >> (8 * 7)) & 0xFF)
+#define getInstructionSpec(insr)     (((insr) >> (8 * 6)) & 0xFF)
+#define getInstructionRegSpace(insr) ((insr) & 0xFFFFFFFF)
+#define getInstructionRegX(insr, x)  (((insr) >> (8 * ((x) - 1))) & 0xFF)
+#define getInstructionImm(insr)      ((insr) & 0xFFFFFFFF)
+
+#define buildInstructionComplete(super, spec, _, __, imm, r1, r2, r3, r4) ((super) | (spec) | (_) | (__) | (imm) | (r1) | ((r2) << 8) | ((r3) << (8 * 2)) | ((r4) << (8 * 3)))
+#define buildInstruction(super, spec, imm, r1, r2, r3, r4) buildInstructionComplete(super, spec, 0L, 0L, imm, r1, r2, r3, r4)
+#define buildInstructionImmediate(super, spec, imm) buildInstruction(super, spec, imm, 0, 0, 0, 0)
+#define buildInstruction4R(super, spec, r1) buildInstruction()
+
 namespace FTVM {
+        enum FTVMSetBase {
+                PUSH = 0xFF00000000000000,
+                POP  = 0xFE00000000000000,
+                IMM  = 0x00FF000000000000,
+        };
+
         struct Header {
                 u8 magic[4];
                 u32 entry;
