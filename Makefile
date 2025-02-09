@@ -2,7 +2,9 @@ NAME = FTVM
 ##========== SOURCES ==========##
 
 SRC  := Logger.cpp \
-	FTVM.cpp
+	FTVM.cpp \
+	utils.cpp \
+	sha256.cpp
 MAIN := main.cpp
 
 ##========== NAMES ==========##

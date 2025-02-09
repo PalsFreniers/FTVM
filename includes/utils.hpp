@@ -6,8 +6,10 @@
 #include <vector>
 
 #define auto __auto_type
+#define unused __attribute__((unused))
 
 int to_int(char const *s);
 u64 scall(u64 number, ...);
 std::string slurp(std::ifstream &influx);
 std::vector<std::string> split(std::string& s, const std::string& delimiter);
+std::string to_string(long x);

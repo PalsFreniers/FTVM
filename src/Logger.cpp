@@ -7,11 +7,11 @@
 
 const char *getLogStr(LogLevel l) {
         switch(l) {
-                case DEBUG: return BLU "[DEBUG]" CLR;
-                case INFO: return GRN "[INFO]" CLR;
-                case WARNING: return YLW "[WARNING]" CLR;
-                case ERROR: return RED "[ERROR]" CLR;
-                case FATAL: return RGB(127, 0, 0) "[FATAL]" CLR;
+                case LOG_DEBUG: return BLU "[DEBUG]" CLR;
+                case LOG_INFO: return GRN "[INFO]" CLR;
+                case LOG_WARNING: return YLW "[WARNING]" CLR;
+                case LOG_ERROR: return RED "[ERROR]" CLR;
+                case LOG_FATAL: return RGB(127, 0, 0) "[FATAL]" CLR;
                 default: return "[LOG]";
         }
 }
@@ -38,6 +38,7 @@ void logFormat(const std::string str, size_t &i, std::va_list lst) {
                 case 'd': std::cerr << va_arg(lst, int); break;
                 case 'l': std::cerr << va_arg(lst, long); break;
                 case 'x': std::cerr << "0x" << std::hex << va_arg(lst, int) << std::dec; break;
+                case 'X': std::cerr << "0x" << std::hex << va_arg(lst, long) << std::dec; break;
                 case 'o': std::cerr << "0" << std::oct << va_arg(lst, int) << std::dec; break;
                 case 'b': std::cerr << "0b" << std::bitset<sizeof(int) * 8>(va_arg(lst, int)) << std::dec; break;
                 default: std::cerr << "/" << str[i]; break;
@@ -46,7 +47,7 @@ void logFormat(const std::string str, size_t &i, std::va_list lst) {
 
 void Logger::log(LogLevel lvl, const std::string fmt, ...) {
 #ifdef RELEASE
-        if(lvl == LogLevel::DEBUG) return;
+        if(lvl == LOG_DEBUG) return;
 #endif // RELEASE
         std::va_list lst;
         std::cerr << getLogStr(lvl) << (_name.empty() ? "" : " ") << _name << " => ";
@@ -57,5 +58,5 @@ void Logger::log(LogLevel lvl, const std::string fmt, ...) {
         }
         va_end(lst);
         std::cerr << std::endl;
-        if(lvl == LogLevel::FATAL) throw std::logic_error(RGB(127, 0, 0) "!![PANIC]!! fatal logger has been reached\n");
+        if(lvl == LOG_FATAL) throw std::logic_error(RGB(127, 0, 0) "!![PANIC]!! fatal logger has been reached\n");
 }

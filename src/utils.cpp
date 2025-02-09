@@ -14,22 +14,22 @@ u64 scall(u64 number, ...) {
         r6 = va_arg(lst, u64);
         u64 ret;
 
-	asm volatile ("mov %1, %%rax \n"
-		      "mov %2, %%rdi \n"
-		      "mov %3, %%rsi \n"
-		      "mov %4, %%rdx \n"
-		      "mov %5, %%r10 \n"
-		      "mov %6, %%r8  \n"
-		      "mov %7, %%r9  \n"
-		      "syscall       \n"
-		      "mov %%rax, %0 \n"
-		      : "=r"(ret)
-		      : "r"(number), "r"(r1),
-		        "r"(r2), "r"(r3),
-		        "r"(r4), "r"(r5),
-		        "r"(r6)
-		      : "%rax", "%rdi", "%rsi", "%rdx", "%r10", "%r8", "%r9",
-		        "memory");
+        asm volatile ("mov %1, %%rax \n"
+                      "mov %2, %%rdi \n"
+                      "mov %3, %%rsi \n"
+                      "mov %4, %%rdx \n"
+                      "mov %5, %%r10 \n"
+                      "mov %6, %%r8  \n"
+                      "mov %7, %%r9  \n"
+                      "syscall       \n"
+                      "mov %%rax, %0 \n"
+                      : "=r"(ret)
+                      : "r"(number), "r"(r1),
+                        "r"(r2),     "r"(r3),
+                        "r"(r4),     "r"(r5),
+                        "r"(r6)
+                      : "%rax", "%rdi", "%rsi", "%rdx", "%r10", "%r8", "%r9",
+                        "memory");
         return ret;
 }
 
@@ -40,38 +40,49 @@ std::string slurp(std::ifstream &influx) {
 }
 
 std::vector<std::string> split(std::string& s, const std::string& delimiter) {
-    std::vector<std::string> tokens;
-    size_t pos = 0;
-    std::string token;
-    while ((pos = s.find(delimiter)) != std::string::npos) {
-        token = s.substr(0, pos);
-        tokens.push_back(token);
-        s.erase(0, pos + delimiter.length());
-    }
-    tokens.push_back(s);
+        std::vector<std::string> tokens;
+        std::vector<std::string> ret;
+        size_t pos = 0;
+        std::string token;
+        while ((pos = s.find(delimiter)) != std::string::npos) {
+                token = s.substr(0, pos);
+                tokens.push_back(token);
+                s.erase(0, pos + delimiter.length());
+        }
+        tokens.push_back(s);
+        for(auto it = tokens.begin(); it != tokens.end(); it++) {
+                if(it->empty()) continue;
+                ret.push_back(*it);
+        }
 
-    return tokens;
+        return ret;
 }
 
 int to_int(char const *s)
 {
-     if ( s == NULL || *s == '\0' )
-        throw std::invalid_argument("null or empty string argument");
+        if ( s == NULL || *s == '\0' )
+                throw std::invalid_argument("null or empty string argument");
 
-     bool negate = (s[0] == '-');
-     if ( *s == '+' || *s == '-' ) 
-         ++s;
+        bool negate = (s[0] == '-');
+        if ( *s == '+' || *s == '-' ) 
+                ++s;
 
-     if ( *s == '\0')
-        throw std::invalid_argument("sign character only.");
+        if ( *s == '\0')
+                throw std::invalid_argument("sign character only.");
 
-     int result = 0;
-     while(*s)
-     {
-          if ( *s < '0' || *s > '9' )
-            throw std::invalid_argument("invalid input string");
-          result = result * 10  - (*s - '0');  //assume negative number
-          ++s;
-     }
-     return negate ? result : -result; //-result is positive!
+        int result = 0;
+        while(*s)
+        {
+                if ( *s < '0' || *s > '9' )
+                        throw std::invalid_argument("invalid input string");
+                result = result * 10  - (*s - '0');  //assume negative number
+                ++s;
+        }
+        return negate ? result : -result; //-result is positive!
 } 
+
+std::string to_string(long x) {
+        std::ostringstream ss;
+        ss << x;
+        return ss.str();
+}

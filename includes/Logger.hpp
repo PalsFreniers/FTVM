@@ -3,11 +3,11 @@
 # include <string>
 
 enum LogLevel {
-        DEBUG,
-        INFO,
-        WARNING,
-        ERROR,
-        FATAL,
+        LOG_DEBUG,
+        LOG_INFO,
+        LOG_WARNING,
+        LOG_ERROR,
+        LOG_FATAL,
 };
 
 const char *getLogStr(LogLevel l);

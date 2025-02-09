@@ -1,18 +1,18 @@
 #pragma once
 
 #include <cstddef>
-#include <cstdint>
+#include <stdint.h>
 #include <sys/types.h>
 
-using u8  = std::uint8_t;
-using u16 = std::uint16_t;
-using u32 = std::uint32_t;
-using u64 = std::uint64_t;
+typedef uint8_t  u8;
+typedef uint16_t u16;
+typedef uint32_t u32;
+typedef uint64_t u64;
 
-using i8  = std::int8_t;
-using i16 = std::int16_t;
-using i32 = std::int32_t;
-using i64 = std::int64_t;
+typedef int8_t  i8;
+typedef int16_t i16;
+typedef int32_t i32;
+typedef int64_t i64;
 
-using usz = size_t;
-using isz = ssize_t;
+typedef size_t  usz;
+typedef ssize_t isz;
