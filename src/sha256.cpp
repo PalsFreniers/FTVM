@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <sstream>
 #include <iomanip>
-#include "sha256.h"
+#include <sha256.hpp>
 
 typedef uint8_t		u8;
 typedef uint32_t	u32;

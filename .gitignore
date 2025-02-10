@@ -4,3 +4,4 @@ main
 OBJ/*
 test*
 FTVM
+.cache

@@ -9,6 +9,7 @@
 #define INSTRUCTION_PUSH 0x01
 #define INSTRUCTION_POP  0x02
 #define INSTRUCTION_CALL 0x03
+#define INSTRUCTION_ADD  0x04
 #define INSTRUCTION_END  0xFF
 
 #define SPEC_IMM 0x01
@@ -43,12 +44,14 @@
 #define buildInstruction1R(super, r1)                      buildInstruction2R(super, r1, 0)
 #define buildInstructionNoArg(super)                       buildInstruction(super, 0, 0, 0, 0, 0, 0)
 
-#define buildNOPIstruction() buildInstructionNoArg(INSTRUCTION_NOP)
-#define buildPUSHiInstruction(imm) buildInstructionImmediate(INSTRUCTION_PUSH, imm)
-#define buildPUSHrInstruction(reg) buildInstruction1R(INSTRUCTION_PUSH, reg)
-#define buildPOPInstruction(reg) buildInstruction1R(INSTRUCTION_POP, reg)
-#define buildCALLInstrucion(addr) buildInstructionImmediate(INSTRUCTION_CALL, addr)
-#define buildENDInstruction() buildInstructionNoArg(INSTRUCTION_END)
+#define buildNOPIstruction()         buildInstructionNoArg(INSTRUCTION_NOP)
+#define buildPUSHiInstruction(imm)   buildInstructionImmediate(INSTRUCTION_PUSH, imm)
+#define buildPUSHrInstruction(reg)   buildInstruction1R(INSTRUCTION_PUSH, reg)
+#define buildPOPInstruction(reg)     buildInstruction1R(INSTRUCTION_POP, reg)
+#define buildCALLInstrucion(addr)    buildInstructionImmediate(INSTRUCTION_CALL, addr)
+#define buildADDrInstruction(r1, r2) buildInstruction2R(INSTRUCTION_ADD, r1, r2)
+#define buildADDiInstruction()       buildInstructionImmediate(INSTRUCTION_ADD, 0)
+#define buildENDInstruction()        buildInstructionNoArg(INSTRUCTION_END)
 
 #define compilerError(msg) ("line : " + to_string(lne) + ", " + (msg))
 
@@ -92,7 +95,7 @@ namespace FTVM {
         };
         #pragma pack(pop)
 
-        typedef void (*extrn)(Registers, std::stack<u32> &);
+        typedef void (*extrn)(Registers &, std::stack<u32> &);
 
         #pragma pack(push, 1)
         struct ExtrnHash {

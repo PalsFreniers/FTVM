@@ -187,6 +187,18 @@ namespace FTVM {
                                 if(it == _extrns.end()) throw std::runtime_error("UnknownExternException");
                                 it->second(_regs, _execStack);
                                 } break;
+                        case INSTRUCTION_ADD:
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                u32 &x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                u32 &y = _getRegisterValue(getInstructionRegX(instr, 2));
+                                x += y;
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                u32 x = _execStack.top(); _execStack.pop();
+                                u32 y = _execStack.top(); _execStack.pop();
+                                x += y;
+                                _execStack.push(x);
+                        } else throw std::runtime_error("UnknownExternException");
+                        break;
                         case INSTRUCTION_END:
                                 _launched = false;
                                 break;
@@ -212,7 +224,7 @@ namespace FTVM {
 
         void Program::show() {
                 std::stack<u32> tmp;
-                std::cout << "Registers : {" << std::endl;
+                std::cout << "Registers :: {" << std::endl;
                 std::cout << "\trip: " << _regs.rip << std::endl;
                 std::cout << "\tr1: " << _regs.r1 << std::endl;
                 std::cout << "\tr2: " << _regs.r2 << std::endl;
@@ -220,14 +232,14 @@ namespace FTVM {
                 std::cout << "\tr4: " << _regs.r4 << std::endl;
                 std::cout << "\tr5: " << _regs.r5 << std::endl;
                 std::cout << "\tr6: " << _regs.r6 << std::endl;
-                std::cout << "\tstack: [ ";
+                std::cout << "}" << std::endl;
+                std::cout << "stack :: [ ";
                 while(_execStack.size() > 0) {
                         std::cout << _execStack.top() << " ";
                         tmp.push(_execStack.top());
                         _execStack.pop();
                 }
                 std::cout << "]" << std::endl;
-                std::cout << "}" << std::endl;
                 while(!tmp.empty()) {
                         _execStack.push(tmp.top());
                         tmp.pop();
@@ -245,8 +257,8 @@ namespace FTVM {
                 if(outPath.empty()) throw std::runtime_error("EmptyFileException");
                 std::ifstream input;
                 std::ofstream output;
-                input.exceptions(std::ifstream::badbit);
-                output.exceptions(std::ofstream::badbit);
+                input.exceptions(std::ifstream::failbit);
+                output.exceptions(std::ofstream::failbit);
                 int lne = 0;
                 std::vector<u64> prog;
                 std::map<std::string, u64> labels;
@@ -255,6 +267,7 @@ namespace FTVM {
                         prog.push_back(0L);
                         input.open(path.c_str());
                         std::string l;
+                        input.exceptions(std::ifstream::badbit);
                         while(std::getline(input, l)) {
                                 lne++;
                                 if(l.empty() || l[0] == '\n') continue;
@@ -302,6 +315,101 @@ namespace FTVM {
                                         if(std::find(extrns.begin(), extrns.end(), line[1]) == extrns.end()) throw std::runtime_error(compilerError("unknown function " + line[1]));
                                         int val = std::find(extrns.begin(), extrns.end(), line[1]) - extrns.begin();
                                         prog.push_back(buildCALLInstrucion(val));
+                                } else if(line[0] == "ADD") {
+                                        if(line.size() != 3) throw std::runtime_error(compilerError("ADD instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        int val1 = 0, val2 = 0;
+                                        int r1 = 0, r2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        try {
+                                                val1 = to_int(line[1].c_str());
+                                        } catch(std::exception &e) {
+                                                isReg1 = true;
+                                                if(line[1] == "R1")       r1 = REG_R1;
+                                                else if(line[1] == "R2")  r1 = REG_R2;
+                                                else if(line[1] == "R3")  r1 = REG_R3;
+                                                else if(line[1] == "R4")  r1 = REG_R4;
+                                                else if(line[1] == "R5")  r1 = REG_R5;
+                                                else if(line[1] == "R6")  r1 = REG_R6;
+                                                else if(line[1] == "RIP") r1 = REG_RIP;
+                                                else throw std::runtime_error(compilerError("unable to parse register or value `" + line[1] + "`"));
+                                        }
+                                        try {
+                                                val2 = to_int(line[2].c_str());
+                                        } catch(std::exception &e) {
+                                                isReg2 = true;
+                                                if(line[2] == "R1")       r2 = REG_R1;
+                                                else if(line[2] == "R2")  r2 = REG_R2;
+                                                else if(line[2] == "R3")  r2 = REG_R3;
+                                                else if(line[2] == "R4")  r2 = REG_R4;
+                                                else if(line[2] == "R5")  r2 = REG_R5;
+                                                else if(line[2] == "R6")  r2 = REG_R6;
+                                                else if(line[2] == "RIP") r2 = REG_RIP;
+                                                else throw std::runtime_error(compilerError("unable to parse register or value `" + line[2] + "`"));
+                                        }
+                                        if(isReg1 && isReg2) {
+                                                prog.push_back(buildADDrInstruction(r1, r2));
+                                        } else if(isReg1) {
+                                                prog.push_back(buildPUSHrInstruction(r1));
+                                                prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildADDiInstruction());
+                                                prog.push_back(buildPOPInstruction(r1));
+                                        } else if(isReg2) {
+                                                prog.push_back(buildPUSHiInstruction(val1));
+                                                prog.push_back(buildPUSHrInstruction(r2));
+                                                prog.push_back(buildADDiInstruction());
+                                        } else {
+                                                prog.push_back(buildPUSHiInstruction(val1));
+                                                prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildADDiInstruction());
+                                        }
+                                } else if(line[0] == "JNE") {
+                                        if(line.size() != 4) throw std::runtime_error(compilerError("JNE instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(labels.find(line[1]) == labels.end()) throw std::runtime_error(compilerError("label `" + line[1] + "` not found"));
+                                        int val1 = 0, val2 = 0;
+                                        int r1 = 0, r2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        try {
+                                                val1 = to_int(line[2].c_str());
+                                        } catch(std::exception &e) {
+                                                isReg1 = true;
+                                                if(line[2] == "R1")       r1 = REG_R1;
+                                                else if(line[2] == "R2")  r1 = REG_R2;
+                                                else if(line[2] == "R3")  r1 = REG_R3;
+                                                else if(line[2] == "R4")  r1 = REG_R4;
+                                                else if(line[2] == "R5")  r1 = REG_R5;
+                                                else if(line[2] == "R6")  r1 = REG_R6;
+                                                else if(line[2] == "RIP") r1 = REG_RIP;
+                                                else throw std::runtime_error(compilerError("unable to parse register or value `" + line[2] + "`"));
+                                        }
+                                        try {
+                                                val2 = to_int(line[3].c_str());
+                                        } catch(std::exception &e) {
+                                                isReg2 = true;
+                                                if(line[3] == "R1")       r2 = REG_R1;
+                                                else if(line[3] == "R2")  r2 = REG_R2;
+                                                else if(line[3] == "R3")  r2 = REG_R3;
+                                                else if(line[3] == "R4")  r2 = REG_R4;
+                                                else if(line[3] == "R5")  r2 = REG_R5;
+                                                else if(line[3] == "R6")  r2 = REG_R6;
+                                                else if(line[3] == "RIP") r2 = REG_RIP;
+                                                else throw std::runtime_error(compilerError("unable to parse register or value `" + line[3] + "`"));
+                                        }
+                                        if(isReg1 && isReg2) {
+                                                prog.push_back(buildJNErInstruction(r1, r2));
+                                        } else if(isReg1) {
+                                                prog.push_back(buildPUSHrInstruction(r1));
+                                                prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildJNEiInstruction());
+                                                prog.push_back(buildPOPInstruction(r1));
+                                        } else if(isReg2) {
+                                                prog.push_back(buildPUSHiInstruction(val1));
+                                                prog.push_back(buildPUSHrInstruction(r2));
+                                                prog.push_back(buildJNEiInstruction());
+                                        } else {
+                                                prog.push_back(buildPUSHiInstruction(val1));
+                                                prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildJNEiInstruction());
+                                        }
                                 } else {
                                         throw std::runtime_error(compilerError("unknown keyword `" + line[0] + "`"));
                                 }
@@ -312,6 +420,7 @@ namespace FTVM {
                         h.segmentsTable = sizeof(Header) + (prog.size() * sizeof(prog[0]));
                         h.segmentNumber = extrns.size() != 0;
                         output.open(outPath.c_str());
+                        input.exceptions(std::ifstream::badbit);
                         output.write((const char *)&h, sizeof(h));
                         for(auto it = prog.begin(); it != prog.end(); it++) output.write((const char *)&(*it), sizeof(*it));
                         u64 sgn = extrns.size() != 0;
