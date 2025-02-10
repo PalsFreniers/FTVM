@@ -48,7 +48,7 @@ endif
 
 ifdef DEBUG
 	CXXFLAGS += -g
-	LDFLAGS += -fsanitize=thread #(address, memory, thread)
+	#LDFLAGS += -fsanitize=thread #(address, memory, thread)
 	DEBUG_MODE = 1
 endif
 

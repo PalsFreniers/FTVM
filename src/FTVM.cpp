@@ -15,6 +15,7 @@
 #include <sha256.hpp>
 #include <vector>
 #include <iostream>
+#include <algorithm>
 
 namespace FTVM {
         bool ExtrnHash::operator<(const ExtrnHash &other) const {
@@ -38,13 +39,13 @@ namespace FTVM {
                 entry = sizeof(Header);
         }
 
-        Program::Program() : _file(NULL), _size(0), _startOffset(0), _path(""), _launched(false), _valid(false) {}
+        Program::Program() : _file(NULL), _size(0), _startOffset(0), _extrnTableOff(NULL), _path(""), _launched(false), _valid(false) {}
         
-        Program::Program(std::string path) : _file(NULL), _size(0), _startOffset(0), _path(""), _launched(false), _valid(false)  {
+        Program::Program(std::string path) : _file(NULL), _size(0), _startOffset(0), _extrnTableOff(NULL), _path(""), _launched(false), _valid(false)  {
                 load(path);
         }
         
-        Program::Program(const Program &other) : _file(NULL), _size(0), _startOffset(0), _path(""), _launched(false), _valid(false)  {
+        Program::Program(const Program &other) : _file(NULL), _size(0), _startOffset(0), _extrnTableOff(NULL), _path(""), _launched(false), _valid(false)  {
                 *this = other;
         }
         
@@ -106,10 +107,11 @@ namespace FTVM {
                                 SegmentHeader *sh = &((SegmentHeader *)(((u8 *)h) + h->segmentsTable))[i];
                                 if(sh->type == ST_EXTRN) {
                                         if(SHEviewed) throw std::runtime_error("MultipleSegmentDefinitionException");
+                                        _extrnTableOff = (ExtrnHeader *)(((u8 *)h) + sh->off);
                                         SHEviewed = true;
                                         for(usz j = 0; j < sh->len; j++) {
                                                 const ExtrnHash hash = {0};
-                                                sha256((char *)(((u8 *)h) + ((ExtrnHeader *)(((u8 *)h) + sh->off))->name), (u32 *)hash.hash);
+                                                sha256((char *)(((u8 *)h) + ((ExtrnHeader *)(((u8 *)h) + sh->off))[j].name), (u32 *)hash.hash);
                                                 _extrns[hash] = NULL;
                                         }
                                 }
@@ -122,6 +124,12 @@ namespace FTVM {
                 }
                 std::signal(SIGSEGV, SIG_DFL);
                 _valid = true;
+        }
+
+        void Program::set(std::string name, extrn func) {
+                const ExtrnHash h = {0};
+                sha256(name, (u32 *)h.hash);
+                _extrns[h] = func;
         }
         
         void Program::launch() {
@@ -170,6 +178,15 @@ namespace FTVM {
                                 }
                                 else throw std::runtime_error("UnknownInstructionException");
                                 break;
+                        case INSTRUCTION_CALL: {
+                                u32 off = getInstructionImm(instr);
+                                std::string name = (char *)_file + _extrnTableOff[off].name;
+                                const ExtrnHash h = {0};
+                                sha256(name, (u32 *)h.hash);
+                                auto it = _extrns.find(h);
+                                if(it == _extrns.end()) throw std::runtime_error("UnknownExternException");
+                                it->second(_regs, _execStack);
+                                } break;
                         case INSTRUCTION_END:
                                 _launched = false;
                                 break;
@@ -233,6 +250,7 @@ namespace FTVM {
                 int lne = 0;
                 std::vector<u64> prog;
                 std::map<std::string, u64> labels;
+                std::vector<std::string> extrns;
                 try {
                         prog.push_back(0L);
                         input.open(path.c_str());
@@ -269,10 +287,21 @@ namespace FTVM {
                                 } else if(line[0] == "LABEL") {
                                         if(line.size() != 2) throw std::runtime_error(compilerError("label instruction need 1 arguments but got " + to_string(line.size() - 1)));
                                         if(labels.find(line[1]) != labels.end()) throw std::runtime_error(compilerError("forbidden reloading of label " + line[1]));
+                                        if(std::find(extrns.begin(), extrns.end(), line[1]) != extrns.end()) throw std::runtime_error(compilerError("forbidden reloading of extern " + line[1]));
                                         labels[line[1]] = prog.size();
                                 } else if(line[0] == "END") {
                                         if(line.size() != 1) throw std::runtime_error(compilerError("end instruction need no arguments but got " + to_string(line.size() - 1)));
                                         prog.push_back(buildENDInstruction());
+                                } else if(line[0] == "EXTERN") {
+                                        if(line.size() != 2) throw std::runtime_error(compilerError("end instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(labels.find(line[1]) != labels.end()) throw std::runtime_error(compilerError("forbidden reloading of label " + line[1]));
+                                        if(std::find(extrns.begin(), extrns.end(), line[1]) != extrns.end()) throw std::runtime_error(compilerError("forbidden reloading of extern " + line[1]));
+                                        extrns.push_back(line[1]);
+                                } else if(line[0] == "CALL") {
+                                        if(line.size() != 2) throw std::runtime_error(compilerError("end instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(std::find(extrns.begin(), extrns.end(), line[1]) == extrns.end()) throw std::runtime_error(compilerError("unknown function " + line[1]));
+                                        int val = std::find(extrns.begin(), extrns.end(), line[1]) - extrns.begin();
+                                        prog.push_back(buildCALLInstrucion(val));
                                 } else {
                                         throw std::runtime_error(compilerError("unknown keyword `" + line[0] + "`"));
                                 }
@@ -281,10 +310,29 @@ namespace FTVM {
                         input.close();
                         Header h = Header();
                         h.segmentsTable = sizeof(Header) + (prog.size() * sizeof(prog[0]));
-                        h.segmentNumber = 0;
+                        h.segmentNumber = extrns.size() != 0;
                         output.open(outPath.c_str());
                         output.write((const char *)&h, sizeof(h));
                         for(auto it = prog.begin(); it != prog.end(); it++) output.write((const char *)&(*it), sizeof(*it));
+                        u64 sgn = extrns.size() != 0;
+                        if(extrns.size() > 0) {
+                                SegmentHeader sgh;
+                                sgh.len = extrns.size();
+                                sgh.type = ST_EXTRN;
+                                sgh.off = h.segmentsTable + (sgn * sizeof(SegmentHeader));
+                                output.write((const char *)&sgh, sizeof(SegmentHeader));
+                                u64 acc = sgh.off + (sgh.len * sizeof(ExtrnHeader));
+                                for(auto it = extrns.begin(); it != extrns.end(); it++) {
+                                       ExtrnHeader eh;
+                                       eh.name = acc;
+                                       acc += (*it).size() + 1;
+                                       output.write((const char *)&eh, sizeof(ExtrnHeader));
+                                }
+                                for(auto it = extrns.begin(); it != extrns.end(); it++) {
+                                       output.write((*it).c_str(), (*it).length());
+                                       output << (char)0;
+                                }
+                        }
                         output.close();
                 } catch(std::exception &e) {
                         _log.log(LOG_ERROR, "unable to compile /s: /s", path.c_str(), e.what());
