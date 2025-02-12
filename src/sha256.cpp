@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 #include <sha256.hpp>
 
 typedef uint8_t		u8;
@@ -45,6 +46,9 @@ struct SHA256
                 state[5] = 0x9b05688c;
                 state[6] = 0x1f83d9ab;
                 state[7] = 0x5be0cd19;
+                for(int i = 0; i < 64; i++) data[i] = 0;
+                bitLen = 0;
+                blockLen = 0;
         }
 };
 
@@ -159,8 +163,22 @@ void sha256(std::string msg, u32 hash[8])
         pad(sha);
         for (uint8_t i = 0 ; i < 4 ; i++) for(uint8_t j = 0 ; j < 8 ; j++) hash_[i + (j * 4)] = (sha.state[j] >> (24 - i * 8)) & 0x000000ff;
         for(int i = 0; i < 8; i++)
-                hash[i] = hash_[8 * i + 0] << (8 * 0)
-                        | hash_[8 * i + 1] << (8 * 1)
-                        | hash_[8 * i + 2] << (8 * 2)
-                        | hash_[8 * i + 3] << (8 * 3);
+                hash[i] = hash_[4 * i + 0] << (8 * 3)
+                        | hash_[4 * i + 1] << (8 * 2)
+                        | hash_[4 * i + 2] << (8 * 1)
+                        | hash_[4 * i + 3] << (8 * 0);
+}
+
+std::string sha256str(u32 hash[8]) {
+        std::ostringstream ss;
+        ss << std::hex;
+        ss << std::setw(8) << std::setfill('0') << hash[0];
+        ss << std::setw(8) << std::setfill('0') << hash[1];
+        ss << std::setw(8) << std::setfill('0') << hash[2];
+        ss << std::setw(8) << std::setfill('0') << hash[3];
+        ss << std::setw(8) << std::setfill('0') << hash[4];
+        ss << std::setw(8) << std::setfill('0') << hash[5];
+        ss << std::setw(8) << std::setfill('0') << hash[6];
+        ss << std::setw(8) << std::setfill('0') << hash[7];
+        return ss.str();
 }

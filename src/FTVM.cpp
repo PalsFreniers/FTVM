@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <exception>
 #include <fstream>
+#include <iomanip>
+#include <ios>
 #include <stack>
 #include <stdexcept>
 #include <fcntl.h>
@@ -19,14 +21,19 @@
 
 namespace FTVM {
         bool ExtrnHash::operator<(const ExtrnHash &other) const {
-                return hash[0] < other.hash[0] &&
-                       hash[1] < other.hash[1] &&
-                       hash[2] < other.hash[2] &&
-                       hash[3] < other.hash[3] &&
-                       hash[4] < other.hash[4] &&
-                       hash[5] < other.hash[5] &&
-                       hash[6] < other.hash[6] &&
-                       hash[7] < other.hash[7];
+                for (int i = 0; i < 8; ++i) {
+                        if (hash[i] != other.hash[i])
+                                return hash[i] < other.hash[i];
+                }
+                return false;
+        }
+
+        bool ExtrnHash::operator==(const ExtrnHash &other) const {
+                for (int i = 0; i < 8; ++i) {
+                        if (hash[i] != other.hash[i])
+                                return false;
+                }
+                return true;
         }
 
         Header::Header() {
@@ -112,7 +119,7 @@ namespace FTVM {
                                         for(usz j = 0; j < sh->len; j++) {
                                                 const ExtrnHash hash = {0};
                                                 sha256((char *)(((u8 *)h) + ((ExtrnHeader *)(((u8 *)h) + sh->off))[j].name), (u32 *)hash.hash);
-                                                _extrns[hash] = NULL;
+                                                _extrns[hash] = NO_FUNC;
                                         }
                                 }
                         }
@@ -133,9 +140,9 @@ namespace FTVM {
         }
         
         void Program::launch() {
-                if(!_valid) throw std::runtime_error("Program " + _path + " not loaded");
+                if(!_valid) throw std::runtime_error("Program " + _path + " not valid");
                 if(_launched) return;
-                for(auto it = _extrns.begin(); it != _extrns.end(); it++) if(it->second == NULL) throw std::runtime_error("extern function not loaded");
+                for(auto it = _extrns.begin(); it != _extrns.end(); it++) if(it->second == NO_FUNC) throw std::runtime_error("extern function not loaded");
                 _regs.rip = 0;
                 _regs.r1 = 0;
                 _regs.r2 = 0;
@@ -159,9 +166,17 @@ namespace FTVM {
                 }
         }
 
+        u32 Program::_pop() {
+                if(_execStack.empty()) throw std::runtime_error("EmptyStackException");
+                u32 val = _execStack.top();
+                _execStack.pop();
+                return val;
+        }
+
         void Program::step() {
                 Logger _log = Logger(_path + " step");
-                if(!_launched || !_valid) throw std::runtime_error("Program " + _path + " not loaded/launched");
+                if(!_valid) throw std::runtime_error("Program " + _path + " not valid");
+                if(!_launched) throw std::runtime_error("Program " + _path + " not launched");
                 u64 instr = *(u64 *)(_file + _startOffset + (_regs.rip * sizeof(u64)));
                 switch(getSuperInstruction(instr)) {
                         case INSTRUCTION_NOP:
@@ -169,14 +184,11 @@ namespace FTVM {
                         case INSTRUCTION_PUSH:
                                 if(getInstructionSpec(instr) == SPEC_IMM) _execStack.push(getInstructionImm(instr));
                                 else if(getInstructionSpec(instr) == SPEC_REG) _execStack.push(_getRegisterValue(getInstructionRegX(instr, 1)));
-                                else throw std::runtime_error("UnknownInstructionException");
+                                else throw std::runtime_error("UnknownSpecException");
                                 break;
                         case INSTRUCTION_POP:
-                                if(getInstructionSpec(instr) == SPEC_REG) {
-                                        _getRegisterValue(getInstructionRegX(instr, 1)) = _execStack.top();
-                                        _execStack.pop();
-                                }
-                                else throw std::runtime_error("UnknownInstructionException");
+                                if(getInstructionSpec(instr) == SPEC_REG) _getRegisterValue(getInstructionRegX(instr, 1)) = _pop();
+                                else throw std::runtime_error("UnknownSpecException");
                                 break;
                         case INSTRUCTION_CALL: {
                                 u32 off = getInstructionImm(instr);
@@ -193,12 +205,129 @@ namespace FTVM {
                                 u32 &y = _getRegisterValue(getInstructionRegX(instr, 2));
                                 x += y;
                         } else if(getInstructionSpec(instr) == SPEC_IMM) {
-                                u32 x = _execStack.top(); _execStack.pop();
-                                u32 y = _execStack.top(); _execStack.pop();
+                                u32 y = _pop();
+                                u32 x = _pop();
                                 x += y;
                                 _execStack.push(x);
-                        } else throw std::runtime_error("UnknownExternException");
+                        } else throw std::runtime_error("UnknownSpecException");
                         break;
+                        case INSTRUCTION_SUB:
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                u32 &x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                u32 &y = _getRegisterValue(getInstructionRegX(instr, 2));
+                                x -= y;
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                u32 y = _pop();
+                                u32 x = _pop();
+                                x -= y;
+                                _execStack.push(x);
+                        } else throw std::runtime_error("UnknownSpecException");
+                        break;
+                        case INSTRUCTION_MUL:
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                u32 &x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                u32 &y = _getRegisterValue(getInstructionRegX(instr, 2));
+                                x *= y;
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                u32 y = _pop();
+                                u32 x = _pop();
+                                x *= y;
+                                _execStack.push(x);
+                        } else throw std::runtime_error("UnknownSpecException");
+                        break;
+                        case INSTRUCTION_DIV:
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                u32 &x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                u32 &y = _getRegisterValue(getInstructionRegX(instr, 2));
+                                x /= y;
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                u32 y = _pop();
+                                u32 x = _pop();
+                                x /= y;
+                                _execStack.push(x);
+                        } else throw std::runtime_error("UnknownSpecException");
+                        break;
+                        case INSTRUCTION_MOD:
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                u32 &x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                u32 &y = _getRegisterValue(getInstructionRegX(instr, 2));
+                                x %= y;
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                u32 y = _pop();
+                                u32 x = _pop();
+                                x %= y;
+                                _execStack.push(x);
+                        } else throw std::runtime_error("UnknownSpecException");
+                        break;
+                        case INSTRUCTION_JNE: {
+                        u32 x, y;
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                y = _getRegisterValue(getInstructionRegX(instr, 2));
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                y = _pop();
+                                x = _pop();
+                        } else throw std::runtime_error("UnknownSpecException");
+                        if(x != y) _regs.rip = _pop() - 1;
+                        } break;
+                        case INSTRUCTION_JE: {
+                        u32 x, y;
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                y = _getRegisterValue(getInstructionRegX(instr, 2));
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                y = _pop();
+                                x = _pop();
+                        } else throw std::runtime_error("UnknownSpecException");
+                        if(x == y) _regs.rip = _pop() - 1;
+                        } break;
+                        case INSTRUCTION_JG: {
+                        u32 x, y;
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                y = _getRegisterValue(getInstructionRegX(instr, 2));
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                y = _pop();
+                                x = _pop();
+                        } else throw std::runtime_error("UnknownSpecException");
+                        if(x > y) _regs.rip = _pop() - 1;
+                        } break;
+                        case INSTRUCTION_JL: {
+                        u32 x, y;
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                y = _getRegisterValue(getInstructionRegX(instr, 2));
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                y = _pop();
+                                x = _pop();
+                        } else throw std::runtime_error("UnknownSpecException");
+                        if(x < y) _regs.rip = _pop() - 1;
+                        } break;
+                        case INSTRUCTION_JGE: {
+                        u32 x, y;
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                y = _getRegisterValue(getInstructionRegX(instr, 2));
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                y = _pop();
+                                x = _pop();
+                        } else throw std::runtime_error("UnknownSpecException");
+                        if(x >= y) _regs.rip = _pop() - 1;
+                        } break;
+                        case INSTRUCTION_JLE: {
+                        u32 x, y;
+                        if(getInstructionSpec(instr) == SPEC_REG) {
+                                x = _getRegisterValue(getInstructionRegX(instr, 1));
+                                y = _getRegisterValue(getInstructionRegX(instr, 2));
+                        } else if(getInstructionSpec(instr) == SPEC_IMM) {
+                                y = _pop();
+                                x = _pop();
+                        } else throw std::runtime_error("UnknownSpecException");
+                        if(x <= y) _regs.rip = _pop() - 1;
+                        } break;
+                        case INSTRUCTION_JMP:
+                                _regs.rip = getInstructionImm(instr) - 1;
+                                break;
                         case INSTRUCTION_END:
                                 _launched = false;
                                 break;
@@ -222,8 +351,43 @@ namespace FTVM {
                 _valid = false;
         }
 
+        const char *getInstructionName(u64 instr) {
+                switch(getSuperInstruction(instr)) {
+                        case INSTRUCTION_NOP:  return "NOP";
+                        case INSTRUCTION_PUSH: return "PUSH";
+                        case INSTRUCTION_POP:  return "POP";
+                        case INSTRUCTION_CALL: return "CALL";
+                        case INSTRUCTION_ADD:  return "ADD";
+                        case INSTRUCTION_SUB:  return "SUB";
+                        case INSTRUCTION_MUL:  return "MUL";
+                        case INSTRUCTION_DIV:  return "DIV";
+                        case INSTRUCTION_MOD:  return "MOD";
+                        case INSTRUCTION_JNE:  return "JNE";
+                        case INSTRUCTION_JE:   return "JE";
+                        case INSTRUCTION_JG:   return "JG";
+                        case INSTRUCTION_JL:   return "JL";
+                        case INSTRUCTION_JGE:  return "JGE";
+                        case INSTRUCTION_JLE:  return "JLE";
+                        case INSTRUCTION_JMP:  return "JMP";
+                        case INSTRUCTION_END:  return "END";
+                        default:               return "UNKNOWN";
+                }
+        }
+
+        const char *getInstructionSpecName(u64 instr) {
+                switch(getInstructionSpec(instr)) {
+                        case SPEC_REG: return "REGISTER";
+                        case SPEC_IMM: return "IMMEDIATE";
+                        default: return "UNKNOWN";
+                }
+        }
+
         void Program::show() {
                 std::stack<u32> tmp;
+                if(!_launched || !_valid) throw std::runtime_error("Program " + _path + " not loaded/launched");
+                u64 instr = *(u64 *)(_file + _startOffset + (_regs.rip * sizeof(u64)));
+                std::cout << "Instruction: 0x" << std::setfill('0') << std::setw(16) << std::hex << instr << std::dec;
+                std::cout << " (" << getInstructionName(instr) << "<" << getInstructionSpecName(instr) << ">" << ")" << std::endl;
                 std::cout << "Registers :: {" << std::endl;
                 std::cout << "\trip: " << _regs.rip << std::endl;
                 std::cout << "\tr1: " << _regs.r1 << std::endl;
@@ -244,6 +408,24 @@ namespace FTVM {
                         _execStack.push(tmp.top());
                         tmp.pop();
                 }
+        }
+
+        u32 parseIntOrReg(std::string arg, int lne, bool &isReg) {
+                int val = 0;
+                try {
+                        val = to_int(arg.c_str());
+                } catch(std::exception &e) {
+                        isReg = true;
+                        if(arg == "R1")       val = REG_R1;
+                        else if(arg == "R2")  val = REG_R2;
+                        else if(arg == "R3")  val = REG_R3;
+                        else if(arg == "R4")  val = REG_R4;
+                        else if(arg == "R5")  val = REG_R5;
+                        else if(arg == "R6")  val = REG_R6;
+                        else if(arg == "RIP") val = REG_RIP;
+                        else throw std::runtime_error(compilerError("unable to parse register or value `" + arg + "`"));
+                }
+                return val;
         }
 
         void compile(std::string path, unused std::string outPath) {
@@ -271,7 +453,9 @@ namespace FTVM {
                         while(std::getline(input, l)) {
                                 lne++;
                                 if(l.empty() || l[0] == '\n') continue;
+                                if(l.length() >= 2 && l[0] == '-' && l[1] == '-') continue;
                                 std::vector<std::string> line = split(split(l, "--")[0], " ");
+                                if(line.empty()) continue;
                                 if(line[0] == "PUSH") {
                                         if(line.size() != 2) throw std::runtime_error(compilerError("push imm instruction need 1 arguments but got " + to_string(line.size() - 1)));
                                         try {
@@ -318,98 +502,178 @@ namespace FTVM {
                                 } else if(line[0] == "ADD") {
                                         if(line.size() != 3) throw std::runtime_error(compilerError("ADD instruction need no arguments but got " + to_string(line.size() - 1)));
                                         int val1 = 0, val2 = 0;
-                                        int r1 = 0, r2 = 0;
                                         bool isReg1 = false, isReg2 = false;
-                                        try {
-                                                val1 = to_int(line[1].c_str());
-                                        } catch(std::exception &e) {
-                                                isReg1 = true;
-                                                if(line[1] == "R1")       r1 = REG_R1;
-                                                else if(line[1] == "R2")  r1 = REG_R2;
-                                                else if(line[1] == "R3")  r1 = REG_R3;
-                                                else if(line[1] == "R4")  r1 = REG_R4;
-                                                else if(line[1] == "R5")  r1 = REG_R5;
-                                                else if(line[1] == "R6")  r1 = REG_R6;
-                                                else if(line[1] == "RIP") r1 = REG_RIP;
-                                                else throw std::runtime_error(compilerError("unable to parse register or value `" + line[1] + "`"));
+                                        val1 = parseIntOrReg(line[1], lne, isReg1);
+                                        val2 = parseIntOrReg(line[2], lne, isReg2);
+                                        if(isReg1 && isReg2) prog.push_back(buildADDrInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildADDiInstruction());
+                                                if(isReg1) prog.push_back(buildPOPInstruction(val1));
                                         }
-                                        try {
-                                                val2 = to_int(line[2].c_str());
-                                        } catch(std::exception &e) {
-                                                isReg2 = true;
-                                                if(line[2] == "R1")       r2 = REG_R1;
-                                                else if(line[2] == "R2")  r2 = REG_R2;
-                                                else if(line[2] == "R3")  r2 = REG_R3;
-                                                else if(line[2] == "R4")  r2 = REG_R4;
-                                                else if(line[2] == "R5")  r2 = REG_R5;
-                                                else if(line[2] == "R6")  r2 = REG_R6;
-                                                else if(line[2] == "RIP") r2 = REG_RIP;
-                                                else throw std::runtime_error(compilerError("unable to parse register or value `" + line[2] + "`"));
+                                } else if(line[0] == "SUB") {
+                                        if(line.size() != 3) throw std::runtime_error(compilerError("SUB instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[1], lne, isReg1);
+                                        val2 = parseIntOrReg(line[2], lne, isReg2);
+                                        if(isReg1 && isReg2) prog.push_back(buildSUBrInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildSUBiInstruction());
+                                                if(isReg1) prog.push_back(buildPOPInstruction(val1));
                                         }
-                                        if(isReg1 && isReg2) {
-                                                prog.push_back(buildADDrInstruction(r1, r2));
-                                        } else if(isReg1) {
-                                                prog.push_back(buildPUSHrInstruction(r1));
-                                                prog.push_back(buildPUSHiInstruction(val2));
-                                                prog.push_back(buildADDiInstruction());
-                                                prog.push_back(buildPOPInstruction(r1));
-                                        } else if(isReg2) {
-                                                prog.push_back(buildPUSHiInstruction(val1));
-                                                prog.push_back(buildPUSHrInstruction(r2));
-                                                prog.push_back(buildADDiInstruction());
-                                        } else {
-                                                prog.push_back(buildPUSHiInstruction(val1));
-                                                prog.push_back(buildPUSHiInstruction(val2));
-                                                prog.push_back(buildADDiInstruction());
+                                } else if(line[0] == "MUL") {
+                                        if(line.size() != 3) throw std::runtime_error(compilerError("MUL instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[1], lne, isReg1);
+                                        val2 = parseIntOrReg(line[2], lne, isReg2);
+                                        if(isReg1 && isReg2) prog.push_back(buildMULrInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildMULiInstruction());
+                                                if(isReg1) prog.push_back(buildPOPInstruction(val1));
+                                        }
+                                } else if(line[0] == "DIV") {
+                                        if(line.size() != 3) throw std::runtime_error(compilerError("DIV instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[1], lne, isReg1);
+                                        val2 = parseIntOrReg(line[2], lne, isReg2);
+                                        if(isReg1 && isReg2) prog.push_back(buildDIVrInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildDIViInstruction());
+                                                if(isReg1) prog.push_back(buildPOPInstruction(val1));
+                                        }
+                                } else if(line[0] == "MOD") {
+                                        if(line.size() != 3) throw std::runtime_error(compilerError("MOD instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[1], lne, isReg1);
+                                        val2 = parseIntOrReg(line[2], lne, isReg2);
+                                        if(isReg1 && isReg2) prog.push_back(buildMODrInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildMODiInstruction());
+                                                if(isReg1) prog.push_back(buildPOPInstruction(val1));
                                         }
                                 } else if(line[0] == "JNE") {
                                         if(line.size() != 4) throw std::runtime_error(compilerError("JNE instruction need no arguments but got " + to_string(line.size() - 1)));
                                         if(labels.find(line[1]) == labels.end()) throw std::runtime_error(compilerError("label `" + line[1] + "` not found"));
                                         int val1 = 0, val2 = 0;
-                                        int r1 = 0, r2 = 0;
                                         bool isReg1 = false, isReg2 = false;
-                                        try {
-                                                val1 = to_int(line[2].c_str());
-                                        } catch(std::exception &e) {
-                                                isReg1 = true;
-                                                if(line[2] == "R1")       r1 = REG_R1;
-                                                else if(line[2] == "R2")  r1 = REG_R2;
-                                                else if(line[2] == "R3")  r1 = REG_R3;
-                                                else if(line[2] == "R4")  r1 = REG_R4;
-                                                else if(line[2] == "R5")  r1 = REG_R5;
-                                                else if(line[2] == "R6")  r1 = REG_R6;
-                                                else if(line[2] == "RIP") r1 = REG_RIP;
-                                                else throw std::runtime_error(compilerError("unable to parse register or value `" + line[2] + "`"));
-                                        }
-                                        try {
-                                                val2 = to_int(line[3].c_str());
-                                        } catch(std::exception &e) {
-                                                isReg2 = true;
-                                                if(line[3] == "R1")       r2 = REG_R1;
-                                                else if(line[3] == "R2")  r2 = REG_R2;
-                                                else if(line[3] == "R3")  r2 = REG_R3;
-                                                else if(line[3] == "R4")  r2 = REG_R4;
-                                                else if(line[3] == "R5")  r2 = REG_R5;
-                                                else if(line[3] == "R6")  r2 = REG_R6;
-                                                else if(line[3] == "RIP") r2 = REG_RIP;
-                                                else throw std::runtime_error(compilerError("unable to parse register or value `" + line[3] + "`"));
-                                        }
-                                        if(isReg1 && isReg2) {
-                                                prog.push_back(buildJNErInstruction(r1, r2));
-                                        } else if(isReg1) {
-                                                prog.push_back(buildPUSHrInstruction(r1));
-                                                prog.push_back(buildPUSHiInstruction(val2));
-                                                prog.push_back(buildJNEiInstruction());
-                                                prog.push_back(buildPOPInstruction(r1));
-                                        } else if(isReg2) {
-                                                prog.push_back(buildPUSHiInstruction(val1));
-                                                prog.push_back(buildPUSHrInstruction(r2));
-                                                prog.push_back(buildJNEiInstruction());
-                                        } else {
-                                                prog.push_back(buildPUSHiInstruction(val1));
-                                                prog.push_back(buildPUSHiInstruction(val2));
+                                        val1 = parseIntOrReg(line[2], lne, isReg1);
+                                        val2 = parseIntOrReg(line[3], lne, isReg2);
+                                        prog.push_back(buildPUSHiInstruction(labels[line[1]]));
+                                        if(isReg1 && isReg2) prog.push_back(buildJNErInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
                                                 prog.push_back(buildJNEiInstruction());
                                         }
+                                } else if(line[0] == "JE") {
+                                        if(line.size() != 4) throw std::runtime_error(compilerError("JE instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(labels.find(line[1]) == labels.end()) throw std::runtime_error(compilerError("label `" + line[1] + "` not found"));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[2], lne, isReg1);
+                                        val2 = parseIntOrReg(line[3], lne, isReg2);
+                                        prog.push_back(buildPUSHiInstruction(labels[line[1]]));
+                                        if(isReg1 && isReg2) prog.push_back(buildJErInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildJEiInstruction());
+                                        }
+                                } else if(line[0] == "JG") {
+                                        if(line.size() != 4) throw std::runtime_error(compilerError("JG instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(labels.find(line[1]) == labels.end()) throw std::runtime_error(compilerError("label `" + line[1] + "` not found"));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[2], lne, isReg1);
+                                        val2 = parseIntOrReg(line[3], lne, isReg2);
+                                        prog.push_back(buildPUSHiInstruction(labels[line[1]]));
+                                        if(isReg1 && isReg2) prog.push_back(buildJGrInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildJGiInstruction());
+                                        }
+                                } else if(line[0] == "JL") {
+                                        if(line.size() != 4) throw std::runtime_error(compilerError("JL instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(labels.find(line[1]) == labels.end()) throw std::runtime_error(compilerError("label `" + line[1] + "` not found"));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[2], lne, isReg1);
+                                        val2 = parseIntOrReg(line[3], lne, isReg2);
+                                        prog.push_back(buildPUSHiInstruction(labels[line[1]]));
+                                        if(isReg1 && isReg2) prog.push_back(buildJLrInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildJLiInstruction());
+                                        }
+                                } else if(line[0] == "JGE") {
+                                        if(line.size() != 4) throw std::runtime_error(compilerError("JGE instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(labels.find(line[1]) == labels.end()) throw std::runtime_error(compilerError("label `" + line[1] + "` not found"));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[2], lne, isReg1);
+                                        val2 = parseIntOrReg(line[3], lne, isReg2);
+                                        prog.push_back(buildPUSHiInstruction(labels[line[1]]));
+                                        if(isReg1 && isReg2) prog.push_back(buildJGErInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildJGEiInstruction());
+                                        }
+                                } else if(line[0] == "JLE") {
+                                        if(line.size() != 4) throw std::runtime_error(compilerError("JLE instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(labels.find(line[1]) == labels.end()) throw std::runtime_error(compilerError("label `" + line[1] + "` not found"));
+                                        int val1 = 0, val2 = 0;
+                                        bool isReg1 = false, isReg2 = false;
+                                        val1 = parseIntOrReg(line[2], lne, isReg1);
+                                        val2 = parseIntOrReg(line[3], lne, isReg2);
+                                        prog.push_back(buildPUSHiInstruction(labels[line[1]]));
+                                        if(isReg1 && isReg2) prog.push_back(buildJLErInstruction(val1, val2));
+                                        else {
+                                                if(isReg1) prog.push_back(buildPUSHrInstruction(val1));
+                                                else prog.push_back(buildPUSHiInstruction(val1));
+                                                if(isReg2) prog.push_back(buildPUSHrInstruction(val2));
+                                                else prog.push_back(buildPUSHiInstruction(val2));
+                                                prog.push_back(buildJLEiInstruction());
+                                        }
+                                } else if(line[0] == "JMP") {
+                                        if(line.size() != 2) throw std::runtime_error(compilerError("JMP instruction need no arguments but got " + to_string(line.size() - 1)));
+                                        if(labels.find(line[1]) == labels.end()) throw std::runtime_error(compilerError("label `" + line[1] + "` not found"));
+                                        prog.push_back(buildJMPiInstruction(labels[line[1]]));
                                 } else {
                                         throw std::runtime_error(compilerError("unknown keyword `" + line[0] + "`"));
                                 }

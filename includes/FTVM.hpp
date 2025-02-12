@@ -10,6 +10,17 @@
 #define INSTRUCTION_POP  0x02
 #define INSTRUCTION_CALL 0x03
 #define INSTRUCTION_ADD  0x04
+#define INSTRUCTION_SUB  0x05
+#define INSTRUCTION_MUL  0x06
+#define INSTRUCTION_DIV  0x07
+#define INSTRUCTION_MOD  0x08
+#define INSTRUCTION_JNE  0x09
+#define INSTRUCTION_JE   0x0a
+#define INSTRUCTION_JL   0x0b
+#define INSTRUCTION_JG   0x0c
+#define INSTRUCTION_JLE  0x0d
+#define INSTRUCTION_JGE  0x0e
+#define INSTRUCTION_JMP  0x0f
 #define INSTRUCTION_END  0xFF
 
 #define SPEC_IMM 0x01
@@ -42,7 +53,7 @@
 #define buildInstruction3R(super, r1, r2, r3)              buildInstruction4R(super, r1, r2, r3, 0)
 #define buildInstruction2R(super, r1, r2)                  buildInstruction3R(super, r1, r2, 0)
 #define buildInstruction1R(super, r1)                      buildInstruction2R(super, r1, 0)
-#define buildInstructionNoArg(super)                       buildInstruction(super, 0, 0, 0, 0, 0, 0)
+#define buildInstructionNoArg(super)                       buildInstruction(super, SPEC_IMM, 0, 0, 0, 0, 0)
 
 #define buildNOPIstruction()         buildInstructionNoArg(INSTRUCTION_NOP)
 #define buildPUSHiInstruction(imm)   buildInstructionImmediate(INSTRUCTION_PUSH, imm)
@@ -50,8 +61,31 @@
 #define buildPOPInstruction(reg)     buildInstruction1R(INSTRUCTION_POP, reg)
 #define buildCALLInstrucion(addr)    buildInstructionImmediate(INSTRUCTION_CALL, addr)
 #define buildADDrInstruction(r1, r2) buildInstruction2R(INSTRUCTION_ADD, r1, r2)
-#define buildADDiInstruction()       buildInstructionImmediate(INSTRUCTION_ADD, 0)
+#define buildADDiInstruction()       buildInstructionNoArg(INSTRUCTION_ADD)
+#define buildSUBrInstruction(r1, r2) buildInstruction2R(INSTRUCTION_SUB, r1, r2)
+#define buildSUBiInstruction()       buildInstructionNoArg(INSTRUCTION_SUB)
+#define buildMULrInstruction(r1, r2) buildInstruction2R(INSTRUCTION_MUL, r1, r2)
+#define buildMULiInstruction()       buildInstructionNoArg(INSTRUCTION_MUL)
+#define buildDIVrInstruction(r1, r2) buildInstruction2R(INSTRUCTION_DIV, r1, r2)
+#define buildDIViInstruction()       buildInstructionNoArg(INSTRUCTION_DIV)
+#define buildMODrInstruction(r1, r2) buildInstruction2R(INSTRUCTION_MOD, r1, r2)
+#define buildMODiInstruction()       buildInstructionNoArg(INSTRUCTION_MOD)
+#define buildJNErInstruction(r1, r2) buildInstruction2R(INSTRUCTION_JNE, r1, r2)
+#define buildJNEiInstruction()       buildInstructionNoArg(INSTRUCTION_JNE)
+#define buildJErInstruction(r1, r2)  buildInstruction2R(INSTRUCTION_JE, r1, r2)
+#define buildJEiInstruction()        buildInstructionNoArg(INSTRUCTION_JE)
+#define buildJLrInstruction(r1, r2)  buildInstruction2R(INSTRUCTION_JL, r1, r2)
+#define buildJLiInstruction()        buildInstructionNoArg(INSTRUCTION_JL)
+#define buildJGrInstruction(r1, r2)  buildInstruction2R(INSTRUCTION_JG, r1, r2)
+#define buildJGiInstruction()        buildInstructionNoArg(INSTRUCTION_JG)
+#define buildJLErInstruction(r1, r2) buildInstruction2R(INSTRUCTION_JLE, r1, r2)
+#define buildJLEiInstruction()       buildInstructionNoArg(INSTRUCTION_JLE)
+#define buildJGErInstruction(r1, r2) buildInstruction2R(INSTRUCTION_JGE, r1, r2)
+#define buildJGEiInstruction()       buildInstructionNoArg(INSTRUCTION_JGE)
+#define buildJMPiInstruction(addr)   buildInstructionImmediate(INSTRUCTION_JMP, addr)
 #define buildENDInstruction()        buildInstructionNoArg(INSTRUCTION_END)
+
+#define NO_FUNC ((FTVM::extrn)-1L)
 
 #define compilerError(msg) ("line : " + to_string(lne) + ", " + (msg))
 
@@ -97,12 +131,11 @@ namespace FTVM {
 
         typedef void (*extrn)(Registers &, std::stack<u32> &);
 
-        #pragma pack(push, 1)
         struct ExtrnHash {
                 u32 hash[8];
                 bool operator<(const ExtrnHash &other) const;
+                bool operator==(const ExtrnHash &other) const;
         };
-        #pragma pack(pop)
 
         class Program {
         public:
@@ -121,6 +154,7 @@ namespace FTVM {
                 operator bool();
         private:
                 u32 &_getRegisterValue(u8 reg);
+                u32 _pop();
 
                 u8 *_file;
                 usz _size;
