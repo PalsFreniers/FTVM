@@ -7,6 +7,8 @@
 
 #define auto __auto_type
 #define unused __attribute__((unused))
+#define KB(x) ((x) * 1000)
+#define MB(x) (KB(x) * 1000)
 
 int to_int(char const *s);
 u64 scall(u64 number, ...);
