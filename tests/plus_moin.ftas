@@ -1,0 +1,138 @@
+EXTERN SYSCALL
+EXTERN READ
+EXTERN RAND
+
+-- addr 100 prompt len: 19
+-- addr 119 win prompt len: 8
+-- addr 127 less prompt len: 13
+-- addr 140 more prompt len: 13
+-- addr 1 RAND value
+
+LABEL ENTRY
+        CALL INIT
+
+LABEL LOOP
+        CALL PROMPT
+        LOAD BYTE R2 1
+        JE END R1 R2
+LABEL MINUS
+        JLE PLUS R1 R2
+        CALL LESS
+        JMP LOOP
+LABEL PLUS
+        CALL MORE
+        JMP LOOP
+LABEL END
+        CALL WIN
+        END
+
+LABEL PROMPT
+        MOV R1 100
+        MOV R2 19
+        CALL PUTS
+        CALL READ
+        RET
+
+LABEL WIN
+        MOV R1 119
+        MOV R2 8
+        CALL PUTS
+        RET
+
+LABEL LESS
+        MOV R1 127
+        MOV R2 13
+        CALL PUTS
+        RET
+
+LABEL MORE
+        MOV R1 140
+        MOV R2 13
+        CALL PUTS
+        RET
+
+LABEL PUTS
+        PUSH R1
+        PUSH R2
+        PUSH R3
+        PUSH R4
+        MOV R3 R1
+        MOV R4 R2
+        MOV R2 1
+        CALL SYS_WRITE
+        POP R4
+        POP R3
+        POP R2
+        POP R1
+        RET
+
+LABEL SYS_WRITE
+        MOV R1 1
+        CALL SYSCALL
+        RET
+
+LABEL INIT
+        -- saving "GAGNE !\n"
+        SAVE BYTE 119 71 -- 'G'
+        SAVE BYTE 120 65 -- 'A'
+        SAVE BYTE 121 71 -- 'G'
+        SAVE BYTE 122 78 -- 'N'
+        SAVE BYTE 123 69 -- 'E'
+        SAVE BYTE 124 32 -- ' '
+        SAVE BYTE 125 33 -- '!'
+        SAVE BYTE 126 10 -- '\n'
+
+        -- saving 'PLUS PETIT !\n'
+        SAVE BYTE 127 80 -- 'P'
+        SAVE BYTE 128 76 -- 'L'
+        SAVE BYTE 129 85 -- 'U'
+        SAVE BYTE 130 83 -- 'S'
+        SAVE BYTE 131 32 -- ' '
+        SAVE BYTE 132 80 -- 'P'
+        SAVE BYTE 133 69 -- 'E'
+        SAVE BYTE 134 84 -- 'T'
+        SAVE BYTE 135 73 -- 'I'
+        SAVE BYTE 136 84 -- 'T'
+        SAVE BYTE 137 32 -- ' '
+        SAVE BYTE 138 33 -- '!'
+        SAVE BYTE 139 10 -- '\n'
+
+        -- saving 'PLUS GRAND !\n'
+        SAVE BYTE 140 80 -- 'P'
+        SAVE BYTE 141 76 -- 'L'
+        SAVE BYTE 142 85 -- 'U'
+        SAVE BYTE 143 82 -- 'S'
+        SAVE BYTE 144 32 -- ' '
+        SAVE BYTE 145 71 -- 'G'
+        SAVE BYTE 146 82 -- 'R'
+        SAVE BYTE 147 65 -- 'A'
+        SAVE BYTE 148 78 -- 'N'
+        SAVE BYTE 149 68 -- 'D'
+        SAVE BYTE 150 32 -- ' '
+        SAVE BYTE 151 33 -- '!'
+        SAVE BYTE 152 10 -- '\n'
+
+        -- saving prompt
+        SAVE BYTE 118 32      -- ' '
+        SAVE BYTE 117 58      -- ':'
+        SAVE BYTE 116 101     -- 'e'
+        SAVE BYTE 115 114     -- 'r'
+        SAVE BYTE 114 98      -- 'b'
+        SAVE BYTE 113 109     -- 'm'
+        SAVE BYTE 112 111     -- 'o'
+        SAVE BYTE 111 110     -- 'n'
+        SAVE BYTE 110 32      -- ' '
+        SAVE BYTE 109 110     -- 'n'
+        SAVE BYTE 108 117     -- 'u'
+        SAVE BYTE 107 32      -- ' '
+        SAVE BYTE 106 122     -- 'z'
+        SAVE BYTE 105 101     -- 'e'
+        SAVE BYTE 104 110     -- 'n'
+        SAVE BYTE 103 105     -- 'i'
+        SAVE BYTE 102 118     -- 'v'
+        SAVE BYTE 101 101     -- 'e'
+        SAVE BYTE 100 68      -- 'D'
+
+        CALL RAND
+        SAVE BYTE 1 R1
+        RET
