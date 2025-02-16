@@ -70,7 +70,7 @@ namespace FTVM {
         Program::operator bool() {
                 return _launched && _valid;
         }
-        
+
         void segvHandler(int n) {
                 (void)n;
                 throw std::runtime_error("SegementationFaultException");
@@ -152,6 +152,7 @@ namespace FTVM {
                 _regs.r4 = 0;
                 _regs.r5 = 0;
                 _regs.r6 = 0;
+                for(int i = 0; i < MB(1); i++) _memory[i] = 0;
                 _launched = true;
         }
 

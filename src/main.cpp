@@ -32,7 +32,7 @@ void RAND(FTVM::Registers &r, unused std::stack<u32> &s, unused u8 mem[MB(1)]) {
 int main() {
         std::srand(std::time(NULL));
         try {
-                FTVM::compile("test2.ftas", "test");
+                //FTVM::compile("tests/plus_moin.ftas", "test");
                 FTVM::Program p = FTVM::Program("test");
                 p.set("SYSCALL", SYSCALL);
                 p.set("READ", READ);
