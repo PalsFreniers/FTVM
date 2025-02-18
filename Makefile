@@ -4,12 +4,14 @@ NAME = FTVM
 SRC  := Logger.cpp \
 	FTVM.cpp \
 	utils.cpp \
-	sha256.cpp
+	sha256.cpp \
+	SharedObject.cpp
 MAIN := main.cpp
 
 ##========== NAMES ==========##
 
 NAME = FTVM
+LIB = FTVML.a
 SRCS_DIR = ./src/
 OBJS_DIR = ./OBJ/
 
@@ -33,10 +35,11 @@ WHITE		=		\033[0;97m
 ##========== COMPILATOR ==========##
 
 CXX = clang++
+AR = ar
 
 ##========== FLAGS ==========##
 
-CXXFLAGS = -Wall -Wextra -std=c++98 -Iincludes -fnon-call-exceptions
+CXXFLAGS = -Wall -Wextra -std=c++98 -Iincludes -fnon-call-exceptions -fPIC
 LDFLAGS = $(LIBS) -fnon-call-exceptions
 LIBS = 
 
@@ -62,6 +65,7 @@ all : $(CLEAR) $(NAME)
 
 $(NAME) : $(OBJS) $(MAIN_OBJ)
 	@$(CXX) -o $(NAME) $(CXXFLAGS) $(MAIN_OBJ) $(OBJS) $(LDFLAGS)
+	@$(AR) rcs $(LIB)  $(OBJS)
 	@echo "$(GREEN)-= $(NAME) compiled =-$(BASE_COLOR)"
 
 clean :
@@ -69,6 +73,7 @@ clean :
 
 fclean : clean
 	@rm -rf $(NAME)
+	@rm -rf $(LIB)
 	@echo "$(CYAN)Files cleaned$(BASE_COLOR)"
 
 re : fclean all

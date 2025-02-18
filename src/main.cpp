@@ -4,48 +4,76 @@
 #include <cstdlib>
 #include <ctime>
 #include <exception>
-#include <stdexcept>
 #include <sys/syscall.h>
 #include <utils.hpp>
 #include <iostream>
+#include <SharedObject.hpp>
 
-void SYSCALL(FTVM::Registers &r, unused std::stack<u32> &s, u8 mem[MB(1)]) {
-        switch (r.r1) {
-                case SYS_write: {
-                        int fd = r.r2;
-                        void *addr = &(mem[r.r3]);
-                        int len = r.r4;
-                        scall(SYS_write, fd, addr, len);
-                        } break;
-                default: throw std::runtime_error("todo: syscall `" + to_string(r.r1) + "`");
+void usage(std::string prog) {
+        std::cout << "Usage: " << prog << "<command> [OPTIONS]" << std::endl;
+        std::cout << "COMMANDS:" << std::endl;
+        std::cout << "      com [file.ftas] -> compile the file \"file.ftas\"" << std::endl;
+        std::cout << "      sim [file]      -> execute the file" << std::endl;
+        std::cout << "      bug [file]      -> execute the file in debug mode" << std::endl;
+        std::cout << "OPTIONS:" << std::endl;
+        std::cout << "      lib [funcs.so]  -> executes the initProg() function from funcs.so" << std::endl;
+}
+
+int main(int c, char *args[]) {
+        if(c != 3 && c != 5) {
+                usage(args[0]);
+                return 1;
         }
-}
-
-void READ(FTVM::Registers &r, unused std::stack<u32> &s, unused u8 mem[MB(1)]) {
-        std::cin >> r.r1;
-}
-
-void RAND(FTVM::Registers &r, unused std::stack<u32> &s, unused u8 mem[MB(1)]) {
-        r.r1 = rand() % 100 + 1;
-}
-
-int main() {
-        std::srand(std::time(NULL));
-        try {
-                //FTVM::compile("tests/plus_moin.ftas", "test");
-                FTVM::Program p = FTVM::Program("test");
-                p.set("SYSCALL", SYSCALL);
-                p.set("READ", READ);
-                p.set("RAND", RAND);
-                p.launch();
-                while(p) {
-                        p.step();
-                        //p.show();
-                        //getchar();
+        std::string command = args[1];
+        std::string file = args[2];
+        SharedObject so = SharedObject();
+        if(c == 5) {
+                if(args[3] != std::string("lib")) {
+                        usage(args[0]);
+                        return 1;
                 }
-                //p.show();
-        } catch(std::exception &e) {
-                Logger().log(LOG_ERROR, "catched exception /s", e.what());
+                so = SharedObject(args[4]); 
+                if(!so) {
+                        Logger().log(LOG_ERROR, "unable to load library `/s`", args[4]);
+                        return 1;
+                }
+        }
+        FTVM::Program prog;
+        if(command == "com") {
+                FTVM::compile(file, "out.a");
+        } else if(command == "sim") {
+                try {
+                        prog.load(file);
+                        if(so) {
+                                void (*func)(FTVM::Program &) = (void (*)(FTVM::Program &))so.get("initProg");
+                                func(prog);
+                        }
+                        prog.launch();
+                        while(prog) prog.step();
+                } catch(std::exception &e) {
+                        Logger().log(LOG_ERROR, "got exception : `/s`", e.what());
+                        return 1;
+                }
+        } else if(command == "bug") {
+                try {
+                        prog.load(file);
+                        if(so) {
+                                void (*func)(FTVM::Program &) = (void (*)(FTVM::Program &))so.get("initProg");
+                                func(prog);
+                        }
+                        prog.launch();
+                        while(prog) {
+                                prog.step();
+                                prog.show();
+                                getchar();
+                        }
+                } catch(std::exception &e) {
+                        Logger().log(LOG_ERROR, "got exception : `/s`", e.what());
+                        return 1;
+                }
+        } else {
+                usage(args[0]);
+                return 1;
         }
         return 0;
 }

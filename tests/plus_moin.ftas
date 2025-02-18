@@ -101,7 +101,7 @@ LABEL INIT
         SAVE BYTE 140 80 -- 'P'
         SAVE BYTE 141 76 -- 'L'
         SAVE BYTE 142 85 -- 'U'
-        SAVE BYTE 143 82 -- 'S'
+        SAVE BYTE 143 83 -- 'S'
         SAVE BYTE 144 32 -- ' '
         SAVE BYTE 145 71 -- 'G'
         SAVE BYTE 146 82 -- 'R'

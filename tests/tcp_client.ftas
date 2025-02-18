@@ -1,0 +1,3 @@
+LABEL ENTRY
+        MOV R1 42
+        END
